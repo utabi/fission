@@ -158,3 +158,45 @@ def generate_case(schema_file: str, output: str, split: bool) -> None:
     except Exception as e:
         click.echo(click.style(f"Error: ケース生成に失敗: {e}", fg="red"), err=True)
         raise SystemExit(1)
+
+
+@main.command("export")
+@click.argument("pcb_file", type=click.Path(exists=True))
+@click.option("-o", "--output", type=click.Path(), default="output", help="出力ディレクトリ")
+@click.option("--no-case", is_flag=True, help="ケース生成をスキップ")
+@click.option("--no-gerbers", is_flag=True, help="Gerber/Drill/PnP生成をスキップ")
+def export(pcb_file: str, output: str, no_case: bool, no_gerbers: bool) -> None:
+    """PCBファイルから製造ファイルを一括生成する.
+
+    PCB_FILE: .kicad_pcb ファイルのパス
+    """
+    from fission.export import run_full_export
+
+    pcb_path = Path(pcb_file)
+    output_dir = Path(output)
+
+    click.echo(f"Exporting to {output_dir}/")
+    click.echo()
+
+    result = run_full_export(
+        pcb_path,
+        output_dir,
+        skip_gerbers=no_gerbers,
+        skip_case=no_case,
+    )
+
+    for step in result.steps:
+        if step.success:
+            symbol = click.style("✓", fg="green")
+            detail = ", ".join(step.files) if step.files else "done"
+            click.echo(f"  {symbol} {step.name}: {detail}")
+        else:
+            symbol = click.style("✗", fg="red")
+            click.echo(f"  {symbol} {step.name}: {step.message}")
+
+    click.echo()
+    if result.all_ok:
+        click.echo(click.style("Export complete.", fg="green"))
+    else:
+        click.echo(click.style("Some steps failed.", fg="yellow"))
+        raise SystemExit(1)
