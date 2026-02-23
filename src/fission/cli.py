@@ -200,3 +200,102 @@ def export(pcb_file: str, output: str, no_case: bool, no_gerbers: bool) -> None:
     else:
         click.echo(click.style("Some steps failed.", fg="yellow"))
         raise SystemExit(1)
+
+
+@main.command("check")
+@click.argument("input_file", type=click.Path(exists=True))
+@click.option(
+    "--level",
+    type=click.Choice(["schema", "geometry", "mesh", "all"], case_sensitive=False),
+    default="all",
+    show_default=True,
+    help="実行するチェックレベル",
+)
+@click.option(
+    "--stl",
+    "stl_path",
+    type=click.Path(exists=True),
+    default=None,
+    help="メッシュ検証に使用する既存STLファイル",
+)
+def check_cmd(input_file: str, level: str, stl_path: str | None) -> None:
+    """PCBスキーマのレイヤー整合性を検証する.
+
+    INPUT_FILE: .kicad_pcb ファイルまたは fission スキーマ JSON
+    """
+    from fission.check import CheckLevel, CheckStatus, run_checks
+    from fission.schema import FissionSchema
+
+    path = Path(input_file)
+
+    if path.suffix == ".kicad_pcb":
+        from fission.kicad.parser import parse_kicad_pcb
+
+        try:
+            schema = parse_kicad_pcb(path)
+        except (FileNotFoundError, ValueError) as e:
+            click.echo(click.style(f"Error: {e}", fg="red"), err=True)
+            raise SystemExit(1)
+    elif path.suffix == ".json":
+        try:
+            schema = FissionSchema.model_validate_json(
+                path.read_text(encoding="utf-8")
+            )
+        except Exception as e:
+            click.echo(
+                click.style(f"Error: スキーマ読み込み失敗: {e}", fg="red"), err=True
+            )
+            raise SystemExit(1)
+    else:
+        click.echo(
+            click.style(
+                "Error: .kicad_pcb または .json ファイルを指定してください", fg="red"
+            ),
+            err=True,
+        )
+        raise SystemExit(1)
+
+    if level == "all":
+        levels = {CheckLevel.SCHEMA, CheckLevel.GEOMETRY, CheckLevel.MESH}
+    else:
+        levels = {CheckLevel(level)}
+
+    stl = Path(stl_path) if stl_path else None
+
+    click.echo(f"Checking {path.name}...")
+    click.echo()
+
+    report = run_checks(schema, levels=levels, stl_path=stl)
+
+    for result in report.results:
+        if result.status == CheckStatus.PASS:
+            symbol = click.style("✓", fg="green")
+            line = f"  {symbol} {result.name}"
+            if result.message:
+                line += f": {result.message}"
+        elif result.status == CheckStatus.WARN:
+            symbol = click.style("△", fg="yellow")
+            line = f"  {symbol} {result.name}: {result.message}"
+        elif result.status == CheckStatus.FAIL:
+            symbol = click.style("✗", fg="red")
+            line = f"  {symbol} {result.name}: {result.message}"
+        else:  # SKIP
+            symbol = click.style("-", fg="cyan")
+            line = f"  {symbol} {result.name}: {result.message}"
+        click.echo(line)
+
+    click.echo()
+    parts = [f"{report.pass_count} passed", f"{report.fail_count} failed"]
+    if report.warn_count:
+        parts.append(f"{report.warn_count} warnings")
+    if report.skip_count:
+        parts.append(f"{report.skip_count} skipped")
+    summary = ", ".join(parts)
+
+    if report.has_failures:
+        click.echo(click.style(f"FAIL — {summary}", fg="red"))
+        raise SystemExit(1)
+    elif report.has_warnings:
+        click.echo(click.style(f"PASS (with warnings) — {summary}", fg="yellow"))
+    else:
+        click.echo(click.style(f"All checks passed — {summary}", fg="green"))
