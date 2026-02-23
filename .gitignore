@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Fission output
+output/
+*.step
+*.stl
+*.gerber
+*.drl
+
+# KiCad backups
+*-backups/
+*.kicad_pcb-bak
+*.kicad_sch-bak
+_autosave-*
+
+# Claude Code
+.claude/
+
+# SKiDL generated files
+*.erc
+*.log
+
+# Test / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
