@@ -60,3 +60,47 @@ def test_extract_nonexistent_file() -> None:
     runner = CliRunner()
     result = runner.invoke(main, ["extract", "/nonexistent/board.kicad_pcb"])
     assert result.exit_code != 0
+
+
+# --- generate-case ---
+
+
+def _make_schema_json(tmp_path: Path) -> Path:
+    """extractでスキーマJSONを生成."""
+    out = tmp_path / "schema.json"
+    runner = CliRunner()
+    result = runner.invoke(main, ["extract", SAMPLE_PCB, "-o", str(out)])
+    assert result.exit_code == 0
+    return out
+
+
+def test_generate_case_step(tmp_path: Path) -> None:
+    """generate-case でSTEPファイルが生成される."""
+    schema_json = _make_schema_json(tmp_path)
+    out = tmp_path / "case.step"
+    runner = CliRunner()
+    result = runner.invoke(main, ["generate-case", str(schema_json), "-o", str(out)])
+    assert result.exit_code == 0
+    assert out.exists()
+    assert out.stat().st_size > 0
+
+
+def test_generate_case_stl(tmp_path: Path) -> None:
+    """generate-case でSTLファイルが生成される."""
+    schema_json = _make_schema_json(tmp_path)
+    out = tmp_path / "case.stl"
+    runner = CliRunner()
+    result = runner.invoke(main, ["generate-case", str(schema_json), "-o", str(out)])
+    assert result.exit_code == 0
+    assert out.exists()
+
+
+def test_generate_case_split(tmp_path: Path) -> None:
+    """--split で分割STLが生成される."""
+    schema_json = _make_schema_json(tmp_path)
+    out = tmp_path / "case.stl"
+    runner = CliRunner()
+    result = runner.invoke(main, ["generate-case", str(schema_json), "-o", str(out), "--split"])
+    assert result.exit_code == 0
+    assert (tmp_path / "case_top.stl").exists()
+    assert (tmp_path / "case_bottom.stl").exists()

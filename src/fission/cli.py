@@ -117,3 +117,44 @@ def extract(pcb_file: str, output: str | None, pretty: bool) -> None:
         click.echo(f"Written to {output}")
     else:
         click.echo(json_str)
+
+
+@main.command("generate-case")
+@click.argument("schema_file", type=click.Path(exists=True))
+@click.option("-o", "--output", type=click.Path(), default="enclosure.step", help="出力ファイル (.step or .stl)")
+@click.option("--split/--no-split", default=False, help="top/bottom分割出力")
+def generate_case(schema_file: str, output: str, split: bool) -> None:
+    """FissionスキーマJSONからケースを生成する.
+
+    SCHEMA_FILE: fission extract で出力したJSONファイル
+    """
+    from fission.case.generator import CaseGenerator
+    from fission.schema import FissionSchema
+
+    try:
+        json_text = Path(schema_file).read_text(encoding="utf-8")
+        schema = FissionSchema.model_validate_json(json_text)
+    except Exception as e:
+        click.echo(click.style(f"Error: スキーマの読み込みに失敗: {e}", fg="red"), err=True)
+        raise SystemExit(1)
+
+    gen = CaseGenerator(schema)
+    out_path = Path(output)
+    is_stl = out_path.suffix.lower() == ".stl"
+
+    try:
+        if split and is_stl:
+            stem = out_path.with_suffix("")
+            top_path = Path(f"{stem}_top.stl")
+            bottom_path = Path(f"{stem}_bottom.stl")
+            gen.export_split_stl(top_path, bottom_path)
+            click.echo(f"Written to {top_path} and {bottom_path}")
+        elif is_stl:
+            gen.export_stl(out_path)
+            click.echo(f"Written to {out_path}")
+        else:
+            gen.export_step(out_path)
+            click.echo(f"Written to {out_path}")
+    except Exception as e:
+        click.echo(click.style(f"Error: ケース生成に失敗: {e}", fg="red"), err=True)
+        raise SystemExit(1)
