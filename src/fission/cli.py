@@ -3,6 +3,7 @@
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 import click
 
@@ -89,3 +90,30 @@ def doctor() -> None:
     else:
         click.echo(click.style("Some checks failed. See INSTALL.md for setup instructions.", fg="red"))
         raise SystemExit(1)
+
+
+@main.command()
+@click.argument("pcb_file", type=click.Path(exists=True))
+@click.option("-o", "--output", type=click.Path(), default=None, help="出力先JSONファイル (省略時はstdout)")
+@click.option("--pretty/--compact", default=True, help="JSON出力のインデント")
+def extract(pcb_file: str, output: str | None, pretty: bool) -> None:
+    """KiCad PCBファイルから基板情報を抽出してFissionスキーマJSONを出力する.
+
+    PCB_FILE: .kicad_pcb ファイルのパス
+    """
+    from fission.kicad.parser import parse_kicad_pcb
+
+    try:
+        schema = parse_kicad_pcb(pcb_file)
+    except (FileNotFoundError, ValueError) as e:
+        click.echo(click.style(f"Error: {e}", fg="red"), err=True)
+        raise SystemExit(1)
+
+    indent = 2 if pretty else None
+    json_str = schema.model_dump_json(indent=indent)
+
+    if output:
+        Path(output).write_text(json_str + "\n", encoding="utf-8")
+        click.echo(f"Written to {output}")
+    else:
+        click.echo(json_str)
